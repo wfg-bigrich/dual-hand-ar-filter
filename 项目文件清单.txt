@@ -1,0 +1,38 @@
+项目文件清单
+
+线上地址（PC 和手机通用）：
+
+https://wfg-bigrich.github.io/dual-hand-ar-filter/?v=20260621-visual6
+
+正式运行文件：
+
+- index.html：页面入口，当前加载 src/app.js?v=20260621-visual6。
+- src/app.js：AR 手势识别、Canvas 绘制、三块滤镜和性能优化主逻辑。
+- src/geometry.js：双手排序、指尖面片构建和平滑工具。
+- src/styles.css：全屏界面和控制条样式。
+- manifest.webmanifest：PWA 配置。
+- service-worker.js：PWA 缓存，当前缓存名 dual-hand-ar-v6。
+- icon.svg、icon-192.png、icon-512.png、apple-touch-icon.png：网页和桌面图标。
+- .nojekyll：GitHub Pages 静态文件兼容标记。
+
+Windows 本机调试文件：
+
+- 双击启动AR.bat：双击启动本地 HTTP 服务。
+- Start-LocalServer.ps1：自动选择端口、启动 localhost、打开浏览器。
+
+说明文件：
+
+- 使用说明.txt：PC 本地和线上使用方法。
+- 手机打开说明.txt：手机浏览器和添加到主屏幕方法。
+- 部署说明.txt：GitHub Pages / 静态站部署说明。
+- 项目文件清单.txt：当前文件用途说明。
+
+测试文件：
+
+- tests/geometry.test.mjs：验证双手排序、平滑和面片几何。
+- tests/pwa.test.mjs：验证 PWA、图标、缓存版本和脚本版本。
+
+调试归档：
+
+- preview/browser-demo-visual6-corrected.png：当前最新版演示截图。
+- preview/archive/：历史视觉预览和旧版验证截图，不影响项目运行。
