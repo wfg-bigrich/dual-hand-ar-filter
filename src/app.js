@@ -44,13 +44,14 @@ const MEDIAPIPE_SCRIPTS = [
   'https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js',
 ];
 
-const HAND_INFERENCE_INTERVAL_MS = 42;
-const SEGMENTATION_INTERVAL_MS = 120;
-const FILTER_TEXTURE_INTERVAL_MS = 66;
-const MAX_PROCESS_WIDTH = 720;
-const MAX_TEXTURE_WIDTH = 640;
-const MIN_PROCESS_WIDTH = 360;
-const MIN_TEXTURE_WIDTH = 340;
+const FILTER_KINDS = ['red', 'blue', 'green'];
+const HAND_INFERENCE_INTERVAL_MS = 55;
+const SEGMENTATION_INTERVAL_MS = 220;
+const FILTER_TEXTURE_INTERVAL_MS = 120;
+const MAX_PROCESS_WIDTH = 560;
+const MAX_TEXTURE_WIDTH = 320;
+const MIN_PROCESS_WIDTH = 280;
+const MIN_TEXTURE_WIDTH = 200;
 
 const state = {
   mode: 'idle',
@@ -78,6 +79,8 @@ const state = {
   filterTextureDirty: true,
   filterTextureWidth: 0,
   filterTextureHeight: 0,
+  filterTexturePrimed: false,
+  filterTextureKindCursor: 0,
   filterImageData: null,
   needsResize: true,
   statusMessage: '',
@@ -172,6 +175,8 @@ function resetRealtimeCaches({ clearMask = false } = {}) {
   state.lastSegmentationAt = 0;
   state.lastFilterTextureAt = 0;
   state.filterTextureDirty = true;
+  state.filterTexturePrimed = false;
+  state.filterTextureKindCursor = 0;
   state.filterImageData = null;
   state.renderedMaskVersion = -1;
   state.renderedMaskWidth = 0;
@@ -516,17 +521,17 @@ function drawFilteredPanel(kind, points, timestamp) {
   ctx.save();
   traceQuad(ctx, points);
   ctx.clip();
-  ctx.globalAlpha = 0.96;
+  ctx.globalAlpha = 1;
   ctx.drawImage(texture, 0, 0, canvas.width, canvas.height);
 
   if (kind !== 'green') {
     ctx.globalCompositeOperation = 'screen';
-    ctx.globalAlpha = kind === 'red' ? 0.1 : 0.06;
+    ctx.globalAlpha = kind === 'red' ? 0.04 : 0.025;
     ctx.fillStyle = panelAccent(kind);
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     ctx.globalCompositeOperation = 'source-over';
-    ctx.globalAlpha = kind === 'blue' ? 0.08 : 0.18 + Math.sin(timestamp * 0.004) * 0.04;
+    ctx.globalAlpha = kind === 'blue' ? 0.045 : 0.1 + Math.sin(timestamp * 0.004) * 0.025;
     ctx.fillStyle = makePanelSheen(points);
     ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
@@ -537,16 +542,29 @@ function drawPanelChrome(kind, points, timestamp) {
   ctx.save();
   ctx.lineCap = 'butt';
   ctx.lineJoin = 'miter';
-  ctx.globalCompositeOperation = 'screen';
+  ctx.globalCompositeOperation = 'source-over';
 
+  drawPanelEdges(points, timestamp, kind);
   drawVertexCrosses(points, timestamp, kind);
 
   ctx.restore();
 }
 
+function drawPanelEdges(points, timestamp, kind) {
+  const edgeWidth = Math.max(1.35, canvas.width * 0.00125);
+  const overshoot = Math.max(7, canvas.width * 0.0065);
+  const alpha = kind === 'green' ? 0.86 : 0.76;
+
+  points.forEach((point, index) => {
+    const next = points[(index + 1) % points.length];
+    const phase = timestamp * 0.001 + index * 2.4;
+    drawExtendedLine(point, next, overshoot, edgeWidth, alpha, Math.sin(phase) * 0.55, Math.cos(phase) * 0.55);
+  });
+}
+
 function drawVertexCrosses(points, timestamp, kind) {
-  const lineLength = Math.max(24, canvas.width * (kind === 'red' ? 0.044 : 0.034));
-  const lineWidth = Math.max(1.1, canvas.width * 0.00105);
+  const lineLength = Math.max(34, canvas.width * (kind === 'red' ? 0.056 : 0.046));
+  const lineWidth = Math.max(1.55, canvas.width * 0.00135);
 
   points.forEach((point, index) => {
     const previous = points[(index + points.length - 1) % points.length];
@@ -555,9 +573,37 @@ function drawVertexCrosses(points, timestamp, kind) {
     const jitterX = Math.sin(phase) * 0.9;
     const jitterY = Math.cos(phase * 1.17) * 0.9;
 
-    drawCrossStroke(point, next, lineLength, lineWidth, 0.64, jitterX, jitterY);
-    drawCrossStroke(point, previous, lineLength * 0.88, lineWidth, 0.46, -jitterY * 0.8, jitterX * 0.8);
+    drawCrossStroke(point, next, lineLength, lineWidth, 0.94, jitterX, jitterY);
+    drawCrossStroke(point, previous, lineLength * 0.9, lineWidth, 0.76, -jitterY * 0.8, jitterX * 0.8);
   });
+}
+
+function drawExtendedLine(start, end, overshoot, lineWidth, alpha, offsetX = 0, offsetY = 0) {
+  const vectorX = end.x - start.x;
+  const vectorY = end.y - start.y;
+  const magnitude = Math.hypot(vectorX, vectorY) || 1;
+  const unitX = vectorX / magnitude;
+  const unitY = vectorY / magnitude;
+  const fromX = start.x - unitX * overshoot + offsetX;
+  const fromY = start.y - unitY * overshoot + offsetY;
+  const toX = end.x + unitX * overshoot + offsetX;
+  const toY = end.y + unitY * overshoot + offsetY;
+
+  ctx.globalAlpha = alpha * 0.42;
+  ctx.strokeStyle = '#050505';
+  ctx.lineWidth = lineWidth + 2.1;
+  ctx.beginPath();
+  ctx.moveTo(fromX, fromY);
+  ctx.lineTo(toX, toY);
+  ctx.stroke();
+
+  ctx.globalAlpha = alpha;
+  ctx.strokeStyle = '#fff8df';
+  ctx.lineWidth = lineWidth;
+  ctx.beginPath();
+  ctx.moveTo(fromX, fromY);
+  ctx.lineTo(toX, toY);
+  ctx.stroke();
 }
 
 function drawCrossStroke(origin, directionPoint, length, lineWidth, alpha, offsetX, offsetY) {
@@ -567,21 +613,28 @@ function drawCrossStroke(origin, directionPoint, length, lineWidth, alpha, offse
   const unitX = vectorX / magnitude;
   const unitY = vectorY / magnitude;
 
+  const fromX = origin.x - unitX * length * 0.44 + offsetX;
+  const fromY = origin.y - unitY * length * 0.44 + offsetY;
+  const toX = origin.x + unitX * length * 0.76 + offsetX;
+  const toY = origin.y + unitY * length * 0.76 + offsetY;
+
+  ctx.globalAlpha = alpha * 0.5;
+  ctx.strokeStyle = '#050505';
+  ctx.lineWidth = lineWidth + 2.2;
+  ctx.beginPath();
+  ctx.moveTo(fromX, fromY);
+  ctx.lineTo(toX, toY);
+  ctx.stroke();
+
   ctx.globalAlpha = alpha;
   ctx.strokeStyle = '#fff8df';
   ctx.lineWidth = lineWidth;
   ctx.beginPath();
-  ctx.moveTo(
-    origin.x - unitX * length * 0.42 + offsetX,
-    origin.y - unitY * length * 0.42 + offsetY,
-  );
-  ctx.lineTo(
-    origin.x + unitX * length * 0.72 + offsetX,
-    origin.y + unitY * length * 0.72 + offsetY,
-  );
+  ctx.moveTo(fromX, fromY);
+  ctx.lineTo(toX, toY);
   ctx.stroke();
 
-  ctx.globalAlpha = alpha * 0.28;
+  ctx.globalAlpha = alpha * 0.34;
   ctx.lineWidth = Math.max(0.7, lineWidth * 0.56);
   ctx.beginPath();
   ctx.moveTo(
@@ -625,7 +678,7 @@ function maybeRunInference(timestamp) {
     return;
   }
 
-  const width = Math.min(MAX_PROCESS_WIDTH, Math.max(MIN_PROCESS_WIDTH, Math.round(window.innerWidth * 0.68)));
+  const width = Math.min(MAX_PROCESS_WIDTH, Math.max(MIN_PROCESS_WIDTH, Math.round(window.innerWidth * 0.62)));
   const height = Math.round(width * (canvas.height / Math.max(1, canvas.width)));
   const shouldSegment = !state.latestMask || shouldRunAtInterval(state.lastSegmentationAt, timestamp, SEGMENTATION_INTERVAL_MS);
 
@@ -703,7 +756,7 @@ function updateMaskFromSegmentation() {
 }
 
 function updateFilterTextures(timestamp) {
-  const maxTextureWidth = Math.min(MAX_TEXTURE_WIDTH, Math.max(MIN_TEXTURE_WIDTH, Math.round(window.innerWidth * 0.58)));
+  const maxTextureWidth = Math.min(MAX_TEXTURE_WIDTH, Math.max(MIN_TEXTURE_WIDTH, Math.round(window.innerWidth * 0.38)));
   const textureWidth = Math.round(maxTextureWidth);
   const textureHeight = Math.max(1, Math.round(textureWidth * (canvas.height / Math.max(1, canvas.width))));
   const sizeChanged = textureWidth !== state.filterTextureWidth || textureHeight !== state.filterTextureHeight;
@@ -730,6 +783,11 @@ function updateFilterTextures(timestamp) {
   const blueImage = filterImageData.blue;
   const greenImage = filterImageData.green;
   const seed = Math.floor(timestamp * 0.02) + state.textureSeed;
+  const updateAllTextures = state.filterTextureDirty || sizeChanged || !state.filterTexturePrimed;
+  const activeKind = FILTER_KINDS[state.filterTextureKindCursor % FILTER_KINDS.length];
+  const updateRed = updateAllTextures || activeKind === 'red';
+  const updateBlue = updateAllTextures || activeKind === 'blue';
+  const updateGreen = updateAllTextures || activeKind === 'green';
 
   for (let y = 0; y < textureHeight; y += 1) {
     for (let x = 0; x < textureWidth; x += 1) {
@@ -741,18 +799,34 @@ function updateFilterTextures(timestamp) {
       const maskStrength = maskAmount(maskData.data, index);
       const grain = noise2d(x, y, seed) - 0.5;
 
-      writeRedHalftone(redImage.data, index, x, y, luminance, grain, maskStrength);
-      writeBlueSepiaPhoto(blueImage.data, index, x, y, textureWidth, textureHeight, luminance, grain, maskStrength);
-      writeGreenPopHalftone(greenImage.data, index, x, y, luminance, grain, maskStrength);
+      if (updateRed) {
+        writeRedHalftone(redImage.data, index, x, y, luminance, grain, maskStrength);
+      }
+      if (updateBlue) {
+        writeBlueSepiaPhoto(blueImage.data, index, x, y, textureWidth, textureHeight, luminance, grain, maskStrength);
+      }
+      if (updateGreen) {
+        writeGreenPopHalftone(greenImage.data, index, x, y, luminance, grain, maskStrength);
+      }
     }
   }
 
-  putFilterImage('red', redImage, textureWidth, textureHeight);
-  putFilterImage('blue', blueImage, textureWidth, textureHeight);
-  putFilterImage('green', greenImage, textureWidth, textureHeight);
+  if (updateRed) {
+    putFilterImage('red', redImage, textureWidth, textureHeight);
+  }
+  if (updateBlue) {
+    putFilterImage('blue', blueImage, textureWidth, textureHeight);
+  }
+  if (updateGreen) {
+    putFilterImage('green', greenImage, textureWidth, textureHeight);
+  }
 
   state.lastFilterTextureAt = timestamp;
   state.filterTextureDirty = false;
+  state.filterTexturePrimed = true;
+  if (!updateAllTextures) {
+    state.filterTextureKindCursor += 1;
+  }
   state.filterTextureWidth = textureWidth;
   state.filterTextureHeight = textureHeight;
 }
@@ -781,7 +855,7 @@ function getReusableFilterImageData(width, height) {
 }
 
 function writeRedHalftone(data, index, x, y, luminance, grain, maskStrength) {
-  const cell = 3.25;
+  const cell = 1.72;
   const center = cell * 0.5;
   const cellX = Math.floor(x / cell);
   const cellY = Math.floor(y / cell);
@@ -789,29 +863,29 @@ function writeRedHalftone(data, index, x, y, luminance, grain, maskStrength) {
   const localX = (x % cell) - center + fiber * 0.42;
   const localY = (y % cell) - center - fiber * 0.34;
   const shade = clamp(1 - luminance / 255 + grain * 0.18 + fiber * 0.16, 0, 1);
-  const dotRadius = clamp(0.26 + shade * cell * 0.58, 0.22, cell * 0.46);
+  const dotRadius = clamp(0.24 + shade * cell * 0.62, 0.2, cell * 0.5);
   const distance = Math.hypot(localX, localY);
   const softEdge = clamp((dotRadius - distance + 0.56) / 1.12, 0, 1);
-  const paperGrain = grain * 18 + fiber * 12 + (((x + y * 3) % 17 === 0) ? -16 : 0);
+  const paperGrain = grain * 15 + fiber * 10 + (((x + y * 3) % 17 === 0) ? -14 : 0);
   const paper = [
-    228 + paperGrain,
-    205 + paperGrain * 0.78,
-    166 + paperGrain * 0.48,
+    226 + paperGrain,
+    198 + paperGrain * 0.76,
+    154 + paperGrain * 0.46,
   ];
   const burgundyNoise = grain * 12 + fiber * 10;
   const ink = [
-    116 + burgundyNoise,
-    27 + burgundyNoise * 0.34,
-    30 + burgundyNoise * 0.3,
+    134 + burgundyNoise,
+    28 + burgundyNoise * 0.34,
+    31 + burgundyNoise * 0.3,
   ];
-  const stain = clamp(shade * 0.12 + Math.max(0, -grain) * 0.05, 0, 0.16);
+  const stain = clamp(shade * 0.18 + Math.max(0, -grain) * 0.05, 0, 0.22);
   const background = mixColor(paper, ink, stain);
-  const color = mixColor(background, ink, softEdge * (0.72 + shade * 0.28));
+  const color = mixColor(background, ink, softEdge * (0.82 + shade * 0.18));
 
   data[index] = clamp(color[0], 0, 255);
   data[index + 1] = clamp(color[1], 0, 255);
   data[index + 2] = clamp(color[2], 0, 255);
-  data[index + 3] = Math.round(maskStrength * 244);
+  data[index + 3] = panelAlpha(maskStrength, 252, 0.74);
 }
 
 function writeBlueSepiaPhoto(data, index, x, y, width, height, luminance, grain, maskStrength) {
@@ -824,11 +898,11 @@ function writeBlueSepiaPhoto(data, index, x, y, width, height, luminance, grain,
   const dust = noise2d(Math.floor(x / 3), Math.floor(y / 3), state.textureSeed + 131);
   const scratchColumn = noise2d(Math.floor(x / 2), 0, state.textureSeed + 211);
   const scratchBreak = noise2d(Math.floor(x / 2), Math.floor(y / 9), state.textureSeed + 227);
-  const softTone = clamp(0.18 + ((luminance - 24) / 220) * 0.64 - vignette + filmNoise * 0.055, 0, 1);
+  const softTone = clamp(0.13 + ((luminance - 24) / 216) * 0.68 - vignette + filmNoise * 0.055, 0, 1);
   const base = softTone < 0.58
-    ? mixColor([32, 25, 18], [116, 96, 70], softTone / 0.58)
-    : mixColor([116, 96, 70], [222, 204, 166], (softTone - 0.58) / 0.42);
-  let age = grain * 15 + filmNoise * 20;
+    ? mixColor([25, 19, 13], [124, 95, 58], softTone / 0.58)
+    : mixColor([124, 95, 58], [228, 200, 150], (softTone - 0.58) / 0.42);
+  let age = grain * 13 + filmNoise * 18;
 
   if (dust > 0.992) {
     age += 58;
@@ -843,29 +917,33 @@ function writeBlueSepiaPhoto(data, index, x, y, width, height, luminance, grain,
   data[index] = clamp(base[0] + age, 0, 255);
   data[index + 1] = clamp(base[1] + age * 0.82, 0, 255);
   data[index + 2] = clamp(base[2] + age * 0.58, 0, 255);
-  data[index + 3] = Math.round(maskStrength * 236);
+  data[index + 3] = panelAlpha(maskStrength, 248, 0.72);
 }
 
 function writeGreenPopHalftone(data, index, x, y, luminance, grain, maskStrength) {
-  const cell = 3.8;
+  const cell = 1.94;
   const center = cell * 0.5;
   const localX = (x % cell) - center;
   const localY = (y % cell) - center;
-  const shade = clamp(1 - luminance / 255 + grain * 0.08, 0, 1);
-  const radius = clamp(0.2 + shade * cell * 0.72, 0.16, cell * 0.62);
-  const isInk = Math.hypot(localX, localY) <= radius;
+  const shade = clamp(0.9 - luminance / 255 + grain * 0.06, 0, 1);
+  const radius = clamp(0.14 + shade * cell * 0.58, 0.12, cell * 0.54);
+  const isInk = localX * localX + localY * localY <= radius * radius;
 
   if (isInk) {
     data[index] = 0;
     data[index + 1] = 0;
     data[index + 2] = 0;
   } else {
-    data[index] = 248;
-    data[index + 1] = 211;
-    data[index + 2] = 18;
+    data[index] = 255;
+    data[index + 1] = 215;
+    data[index + 2] = 0;
   }
 
-  data[index + 3] = Math.round(maskStrength * 242);
+  data[index + 3] = panelAlpha(maskStrength, 255, 0.82);
+}
+
+function panelAlpha(maskStrength, maxAlpha, minimumCoverage) {
+  return Math.round((minimumCoverage + maskStrength * (1 - minimumCoverage)) * maxAlpha);
 }
 
 function maskAmount(maskData, index) {
@@ -894,8 +972,12 @@ function mixColor(a, b, amount) {
 }
 
 function noise2d(x, y, seed) {
-  const value = Math.sin(x * 12.9898 + y * 78.233 + seed * 37.719) * 43758.5453;
-  return value - Math.floor(value);
+  let hash = Math.imul(Math.floor(x), 374761393)
+    ^ Math.imul(Math.floor(y), 668265263)
+    ^ Math.imul(seed | 0, 2246822519);
+  hash = Math.imul(hash ^ (hash >>> 13), 1274126177);
+  hash ^= hash >>> 16;
+  return (hash >>> 0) / 4294967295;
 }
 
 function addCameraGrain(targetCtx, width, height, timestamp, strength) {
