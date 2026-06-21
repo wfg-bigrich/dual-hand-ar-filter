@@ -519,15 +519,17 @@ function drawFilteredPanel(kind, points, timestamp) {
   ctx.globalAlpha = 0.96;
   ctx.drawImage(texture, 0, 0, canvas.width, canvas.height);
 
-  ctx.globalCompositeOperation = 'screen';
-  ctx.globalAlpha = kind === 'red' ? 0.1 : 0.08;
-  ctx.fillStyle = panelAccent(kind);
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  if (kind !== 'green') {
+    ctx.globalCompositeOperation = 'screen';
+    ctx.globalAlpha = kind === 'red' ? 0.1 : 0.06;
+    ctx.fillStyle = panelAccent(kind);
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  ctx.globalCompositeOperation = 'source-over';
-  ctx.globalAlpha = 0.18 + Math.sin(timestamp * 0.004) * 0.04;
-  ctx.fillStyle = makePanelSheen(points);
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = kind === 'blue' ? 0.08 : 0.18 + Math.sin(timestamp * 0.004) * 0.04;
+    ctx.fillStyle = makePanelSheen(points);
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
   ctx.restore();
 }
 
@@ -740,8 +742,8 @@ function updateFilterTextures(timestamp) {
       const grain = noise2d(x, y, seed) - 0.5;
 
       writeRedHalftone(redImage.data, index, x, y, luminance, grain, maskStrength);
-      writeBlueThermal(blueImage.data, index, x, y, luminance, grain, maskStrength);
-      writeGreenPseudo(greenImage.data, index, x, y, sourceData.data, textureWidth, textureHeight, luminance, grain, maskStrength);
+      writeBlueSepiaPhoto(blueImage.data, index, x, y, textureWidth, textureHeight, luminance, grain, maskStrength);
+      writeGreenPopHalftone(greenImage.data, index, x, y, luminance, grain, maskStrength);
     }
   }
 
@@ -812,34 +814,58 @@ function writeRedHalftone(data, index, x, y, luminance, grain, maskStrength) {
   data[index + 3] = Math.round(maskStrength * 244);
 }
 
-function writeBlueThermal(data, index, x, y, luminance, grain, maskStrength) {
-  const scan = (Math.sin(y * 0.62) + 1) * 0.5;
-  const heat = clamp((luminance - 42) / 178, 0, 1);
-  const base = heat < 0.55
-    ? mixColor([13, 27, 56], [24, 116, 142], heat / 0.55)
-    : mixColor([24, 116, 142], [210, 219, 215], (heat - 0.55) / 0.45);
+function writeBlueSepiaPhoto(data, index, x, y, width, height, luminance, grain, maskStrength) {
+  const centerX = width * 0.5;
+  const centerY = height * 0.5;
+  const dx = (x - centerX) / Math.max(1, width);
+  const dy = (y - centerY) / Math.max(1, height);
+  const vignette = clamp((Math.hypot(dx, dy) - 0.22) * 1.35, 0, 0.32);
+  const filmNoise = noise2d(x * 0.72, y * 0.72, state.textureSeed + 73) - 0.5;
+  const dust = noise2d(Math.floor(x / 3), Math.floor(y / 3), state.textureSeed + 131);
+  const scratchColumn = noise2d(Math.floor(x / 2), 0, state.textureSeed + 211);
+  const scratchBreak = noise2d(Math.floor(x / 2), Math.floor(y / 9), state.textureSeed + 227);
+  const softTone = clamp(0.18 + ((luminance - 24) / 220) * 0.64 - vignette + filmNoise * 0.055, 0, 1);
+  const base = softTone < 0.58
+    ? mixColor([32, 25, 18], [116, 96, 70], softTone / 0.58)
+    : mixColor([116, 96, 70], [222, 204, 166], (softTone - 0.58) / 0.42);
+  let age = grain * 15 + filmNoise * 20;
 
-  data[index] = clamp(base[0] + scan * 9 + grain * 13, 0, 255);
-  data[index + 1] = clamp(base[1] + scan * 12 + grain * 11, 0, 255);
-  data[index + 2] = clamp(base[2] + scan * 15 + grain * 9, 0, 255);
+  if (dust > 0.992) {
+    age += 58;
+  } else if (dust < 0.01) {
+    age -= 42;
+  }
+
+  if (scratchColumn > 0.987 && scratchBreak > 0.24) {
+    age += 46;
+  }
+
+  data[index] = clamp(base[0] + age, 0, 255);
+  data[index + 1] = clamp(base[1] + age * 0.82, 0, 255);
+  data[index + 2] = clamp(base[2] + age * 0.58, 0, 255);
   data[index + 3] = Math.round(maskStrength * 236);
 }
 
-function writeGreenPseudo(data, index, x, y, source, width, height, luminance, grain, maskStrength) {
-  const ghostX = clamp(Math.round(x - 4), 0, width - 1);
-  const ghostY = clamp(Math.round(y + Math.sin(x * 0.05) * 2), 0, height - 1);
-  const ghostIndex = (ghostY * width + ghostX) * 4;
-  const ghostLuma = source[ghostIndex] * 0.2126 + source[ghostIndex + 1] * 0.7152 + source[ghostIndex + 2] * 0.0722;
-  const tone = clamp((luminance * 0.82 + ghostLuma * 0.18 - 26) / 210, 0, 1);
-  const base = tone < 0.52
-    ? mixColor([20, 55, 43], [85, 118, 86], tone / 0.52)
-    : mixColor([85, 118, 86], [228, 216, 184], (tone - 0.52) / 0.48);
-  const paper = ((x + y) % 5 === 0 ? 10 : 0) + grain * 18;
+function writeGreenPopHalftone(data, index, x, y, luminance, grain, maskStrength) {
+  const cell = 3.8;
+  const center = cell * 0.5;
+  const localX = (x % cell) - center;
+  const localY = (y % cell) - center;
+  const shade = clamp(1 - luminance / 255 + grain * 0.08, 0, 1);
+  const radius = clamp(0.2 + shade * cell * 0.72, 0.16, cell * 0.62);
+  const isInk = Math.hypot(localX, localY) <= radius;
 
-  data[index] = clamp(base[0] + paper, 0, 255);
-  data[index + 1] = clamp(base[1] + paper * 0.9, 0, 255);
-  data[index + 2] = clamp(base[2] + paper * 0.65, 0, 255);
-  data[index + 3] = Math.round(maskStrength * 238);
+  if (isInk) {
+    data[index] = 0;
+    data[index + 1] = 0;
+    data[index + 2] = 0;
+  } else {
+    data[index] = 248;
+    data[index + 1] = 211;
+    data[index + 2] = 18;
+  }
+
+  data[index + 3] = Math.round(maskStrength * 242);
 }
 
 function maskAmount(maskData, index) {
@@ -853,9 +879,9 @@ function panelAccent(kind) {
     return '#741b1e';
   }
   if (kind === 'blue') {
-    return '#4eb8cf';
+    return '#8a6d48';
   }
-  return '#83b36b';
+  return '#f3d018';
 }
 
 function mixColor(a, b, amount) {
