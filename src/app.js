@@ -806,7 +806,7 @@ function updateFilterTextures(timestamp) {
         writeBlueSepiaPhoto(blueImage.data, index, x, y, textureWidth, textureHeight, luminance, grain, maskStrength);
       }
       if (updateGreen) {
-        writeGreenPopHalftone(greenImage.data, index, x, y, luminance, grain, maskStrength);
+        writeKleinBlueScreenprint(greenImage.data, index, x, y, luminance, grain, maskStrength);
       }
     }
   }
@@ -920,26 +920,37 @@ function writeBlueSepiaPhoto(data, index, x, y, width, height, luminance, grain,
   data[index + 3] = panelAlpha(maskStrength, 248, 0.72);
 }
 
-function writeGreenPopHalftone(data, index, x, y, luminance, grain, maskStrength) {
-  const cell = 1.94;
+function writeKleinBlueScreenprint(data, index, x, y, luminance, grain, maskStrength) {
+  const cell = 2.65;
   const center = cell * 0.5;
-  const localX = (x % cell) - center;
-  const localY = (y % cell) - center;
-  const shade = clamp(0.9 - luminance / 255 + grain * 0.06, 0, 1);
-  const radius = clamp(0.14 + shade * cell * 0.58, 0.12, cell * 0.54);
-  const isInk = localX * localX + localY * localY <= radius * radius;
+  const cellX = Math.floor(x / cell);
+  const cellY = Math.floor(y / cell);
+  const pore = noise2d(cellX, cellY, state.textureSeed + 317) - 0.5;
+  const wear = noise2d(Math.floor(x / 4), Math.floor(y / 4), state.textureSeed + 331);
+  const misregister = noise2d(cellY, cellX, state.textureSeed + 349) - 0.5;
+  const localX = (x % cell) - center + pore * 0.34 + misregister * 0.18;
+  const localY = (y % cell) - center - pore * 0.26;
+  const blockTone = clamp(1 - luminance / 255 + grain * 0.1 + pore * 0.18, 0, 1);
+  const hardTone = blockTone > 0.45 ? 1 : blockTone > 0.34 ? 0.58 : 0;
+  const radius = clamp(0.26 + hardTone * cell * 0.62, 0.22, cell * 0.56);
+  let isInk = localX * localX + localY * localY <= radius * radius;
 
-  if (isInk) {
-    data[index] = 0;
-    data[index + 1] = 0;
-    data[index + 2] = 0;
-  } else {
-    data[index] = 255;
-    data[index + 1] = 215;
-    data[index + 2] = 0;
+  if (wear > 0.968) {
+    isInk = !isInk;
   }
 
-  data[index + 3] = panelAlpha(maskStrength, 255, 0.82);
+  if (isInk || luminance < 54) {
+    data[index] = 0;
+    data[index + 1] = 47;
+    data[index + 2] = 167;
+  } else {
+    const paperGrain = grain * 10 + pore * 8;
+    data[index] = clamp(229 + paperGrain, 0, 255);
+    data[index + 1] = clamp(218 + paperGrain * 0.82, 0, 255);
+    data[index + 2] = clamp(184 + paperGrain * 0.56, 0, 255);
+  }
+
+  data[index + 3] = panelAlpha(maskStrength, 255, 0.84);
 }
 
 function panelAlpha(maskStrength, maxAlpha, minimumCoverage) {
@@ -959,7 +970,7 @@ function panelAccent(kind) {
   if (kind === 'blue') {
     return '#8a6d48';
   }
-  return '#f3d018';
+  return '#002fa7';
 }
 
 function mixColor(a, b, amount) {
