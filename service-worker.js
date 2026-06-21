@@ -1,10 +1,10 @@
-const CACHE_NAME = 'dual-hand-ar-v5';
+const CACHE_NAME = 'dual-hand-ar-v6';
 const APP_SHELL = [
   './',
   './index.html',
   './src/styles.css',
   './src/app.js',
-  './src/app.js?v=20260621-visual5',
+  './src/app.js?v=20260621-visual6',
   './src/geometry.js',
   './manifest.webmanifest',
   './icon.svg',
