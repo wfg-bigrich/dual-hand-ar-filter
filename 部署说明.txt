@@ -1,0 +1,73 @@
+﻿PC 和手机随时打开部署说明
+
+推荐方式：部署到 HTTPS 静态网站
+
+这个项目是纯前端静态项目，不需要后端框架。要让 PC 和手机都能随时打开，并且手机摄像头可用，请部署到 HTTPS 地址，例如：
+
+- GitHub Pages
+- Netlify
+- Vercel
+- Cloudflare Pages
+
+不要用手机访问 http://电脑IP:端口/ 作为正式方案。大多数手机浏览器只允许 HTTPS 或本机 localhost 调用摄像头，普通局域网 HTTP 会被浏览器拦截摄像头权限。
+
+需要上传的文件
+
+- index.html
+- manifest.webmanifest
+- service-worker.js
+- icon.svg
+- icon-192.png
+- icon-512.png
+- apple-touch-icon.png
+- src/styles.css
+- src/app.js
+- src/geometry.js
+
+本机调试文件可以保留，但不需要上传：
+
+- Start-LocalServer.ps1
+- 双击启动AR.bat
+- tests/
+
+GitHub Pages 简易步骤
+
+1. 新建一个 GitHub 仓库。
+2. 上传本项目所有文件，至少包含上面“需要上传的文件”。
+3. 打开仓库 Settings。
+4. 进入 Pages。
+5. Source 选择 Deploy from a branch。
+6. Branch 选择 main，目录选择 /root。
+7. 保存后等待部署完成。
+8. 使用 GitHub Pages 给出的 https:// 地址在 PC 和手机浏览器中打开。
+
+Netlify 简易步骤
+
+1. 打开 Netlify。
+2. 选择 Add new site。
+3. 上传整个项目文件夹，或连接 Git 仓库。
+4. Build command 留空。
+5. Publish directory 填项目根目录。
+6. 部署完成后，用 Netlify 生成的 https:// 地址打开。
+
+手机添加到主屏幕
+
+Android Chrome：
+
+1. 用 HTTPS 地址打开页面。
+2. 点击浏览器菜单。
+3. 选择“添加到主屏幕”或“安装应用”。
+
+iPhone Safari：
+
+1. 用 HTTPS 地址打开页面。
+2. 点击分享按钮。
+3. 选择“添加到主屏幕”。
+
+注意事项
+
+- 首次加载 MediaPipe 模型需要网络。
+- 首次允许摄像头后，浏览器通常会记住权限。
+- PWA 会缓存页面外壳，方便下次更快打开；但如果浏览器清理缓存，仍需要重新加载资源。
+- 如果模型加载失败，请确认手机能访问 jsDelivr CDN。
+- 如果在微信、QQ、抖音、微博等内置浏览器中打开失败，请使用“在浏览器打开”，然后用 Safari、Chrome、Edge 或三星浏览器访问同一个 HTTPS 地址。
