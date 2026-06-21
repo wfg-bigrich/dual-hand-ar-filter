@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+    <meta name="theme-color" content="#050609">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="双手AR">
+    <title>双手 AR 滤镜</title>
+    <link rel="icon" href="data:,">
+    <link rel="manifest" href="./manifest.webmanifest">
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png">
+    <link rel="stylesheet" href="./src/styles.css">
+    <script type="module" src="./src/app.js"></script>
+  </head>
+  <body>
+    <main class="stage" aria-label="双手 AR 滤镜舞台">
+      <video id="cameraVideo" class="camera-video" playsinline muted></video>
+      <canvas id="arCanvas" class="ar-canvas"></canvas>
+
+      <div id="status" class="status" role="status" aria-live="polite">请使用 localhost 打开页面</div>
+
+      <div id="controls" class="controls" aria-label="控制">
+        <button id="startButton" type="button">启动摄像头</button>
+        <button id="demoButton" type="button">演示模式</button>
+        <button id="resetButton" type="button">重置</button>
+        <label class="smooth-control">
+          <span>跟手平滑度</span>
+          <input id="smoothSlider" type="range" min="0" max="100" value="42">
+        </label>
+      </div>
+    </main>
+  </body>
+</html>
