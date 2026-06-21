@@ -532,29 +532,65 @@ function drawFilteredPanel(kind, points, timestamp) {
 }
 
 function drawPanelChrome(kind, points, timestamp) {
-  const color = panelAccent(kind);
-
   ctx.save();
-  ctx.globalAlpha = 0.82;
-  ctx.lineWidth = Math.max(1.4, canvas.width * 0.0015);
-  ctx.strokeStyle = color;
-  traceQuad(ctx, points);
-  ctx.stroke();
+  ctx.lineCap = 'butt';
+  ctx.lineJoin = 'miter';
+  ctx.globalCompositeOperation = 'screen';
 
-  ctx.globalAlpha = 0.18;
-  ctx.lineWidth = Math.max(7, canvas.width * 0.007);
-  traceQuad(ctx, points);
-  ctx.stroke();
+  drawVertexCrosses(points, timestamp, kind);
 
-  const pulse = 2 + Math.sin(timestamp * 0.006) * 1.2;
-  ctx.globalAlpha = 0.86;
-  ctx.fillStyle = '#f8edcf';
-  for (const point of points) {
-    ctx.beginPath();
-    ctx.arc(point.x, point.y, Math.max(2.2, canvas.width * 0.0024) + pulse * 0.15, 0, Math.PI * 2);
-    ctx.fill();
-  }
   ctx.restore();
+}
+
+function drawVertexCrosses(points, timestamp, kind) {
+  const lineLength = Math.max(24, canvas.width * (kind === 'red' ? 0.044 : 0.034));
+  const lineWidth = Math.max(1.1, canvas.width * 0.00105);
+
+  points.forEach((point, index) => {
+    const previous = points[(index + points.length - 1) % points.length];
+    const next = points[(index + 1) % points.length];
+    const phase = timestamp * 0.0013 + index * 1.9;
+    const jitterX = Math.sin(phase) * 0.9;
+    const jitterY = Math.cos(phase * 1.17) * 0.9;
+
+    drawCrossStroke(point, next, lineLength, lineWidth, 0.64, jitterX, jitterY);
+    drawCrossStroke(point, previous, lineLength * 0.88, lineWidth, 0.46, -jitterY * 0.8, jitterX * 0.8);
+  });
+}
+
+function drawCrossStroke(origin, directionPoint, length, lineWidth, alpha, offsetX, offsetY) {
+  const vectorX = directionPoint.x - origin.x;
+  const vectorY = directionPoint.y - origin.y;
+  const magnitude = Math.hypot(vectorX, vectorY) || 1;
+  const unitX = vectorX / magnitude;
+  const unitY = vectorY / magnitude;
+
+  ctx.globalAlpha = alpha;
+  ctx.strokeStyle = '#fff8df';
+  ctx.lineWidth = lineWidth;
+  ctx.beginPath();
+  ctx.moveTo(
+    origin.x - unitX * length * 0.42 + offsetX,
+    origin.y - unitY * length * 0.42 + offsetY,
+  );
+  ctx.lineTo(
+    origin.x + unitX * length * 0.72 + offsetX,
+    origin.y + unitY * length * 0.72 + offsetY,
+  );
+  ctx.stroke();
+
+  ctx.globalAlpha = alpha * 0.28;
+  ctx.lineWidth = Math.max(0.7, lineWidth * 0.56);
+  ctx.beginPath();
+  ctx.moveTo(
+    origin.x - unitX * length * 0.33 + offsetX + 1.4,
+    origin.y - unitY * length * 0.33 + offsetY + 1.4,
+  );
+  ctx.lineTo(
+    origin.x + unitX * length * 0.56 + offsetX + 1.4,
+    origin.y + unitY * length * 0.56 + offsetY + 1.4,
+  );
+  ctx.stroke();
 }
 
 function makePanelSheen(points) {
@@ -743,19 +779,36 @@ function getReusableFilterImageData(width, height) {
 }
 
 function writeRedHalftone(data, index, x, y, luminance, grain, maskStrength) {
-  const cell = 7;
-  const localX = (x % cell) - cell / 2;
-  const localY = (y % cell) - cell / 2;
-  const radius = (1 - luminance / 255) * cell * 0.58 + grain * 1.1;
-  const dot = Math.hypot(localX, localY) < radius;
-  const ink = luminance < 70 || (dot && luminance < 150);
-  const color = ink
-    ? mixColor([26, 20, 18], [184, 36, 30], clamp((luminance - 35) / 120, 0, 1))
-    : mixColor([232, 218, 190], [198, 54, 42], clamp((150 - luminance) / 170, 0, 0.32));
+  const cell = 3.25;
+  const center = cell * 0.5;
+  const cellX = Math.floor(x / cell);
+  const cellY = Math.floor(y / cell);
+  const fiber = noise2d(cellX, cellY, state.textureSeed + 41) - 0.5;
+  const localX = (x % cell) - center + fiber * 0.42;
+  const localY = (y % cell) - center - fiber * 0.34;
+  const shade = clamp(1 - luminance / 255 + grain * 0.18 + fiber * 0.16, 0, 1);
+  const dotRadius = clamp(0.26 + shade * cell * 0.58, 0.22, cell * 0.46);
+  const distance = Math.hypot(localX, localY);
+  const softEdge = clamp((dotRadius - distance + 0.56) / 1.12, 0, 1);
+  const paperGrain = grain * 18 + fiber * 12 + (((x + y * 3) % 17 === 0) ? -16 : 0);
+  const paper = [
+    228 + paperGrain,
+    205 + paperGrain * 0.78,
+    166 + paperGrain * 0.48,
+  ];
+  const burgundyNoise = grain * 12 + fiber * 10;
+  const ink = [
+    116 + burgundyNoise,
+    27 + burgundyNoise * 0.34,
+    30 + burgundyNoise * 0.3,
+  ];
+  const stain = clamp(shade * 0.12 + Math.max(0, -grain) * 0.05, 0, 0.16);
+  const background = mixColor(paper, ink, stain);
+  const color = mixColor(background, ink, softEdge * (0.72 + shade * 0.28));
 
-  data[index] = clamp(color[0] + grain * 22, 0, 255);
-  data[index + 1] = clamp(color[1] + grain * 14, 0, 255);
-  data[index + 2] = clamp(color[2] + grain * 9, 0, 255);
+  data[index] = clamp(color[0], 0, 255);
+  data[index + 1] = clamp(color[1], 0, 255);
+  data[index + 2] = clamp(color[2], 0, 255);
   data[index + 3] = Math.round(maskStrength * 244);
 }
 
@@ -797,7 +850,7 @@ function maskAmount(maskData, index) {
 
 function panelAccent(kind) {
   if (kind === 'red') {
-    return '#e24a36';
+    return '#741b1e';
   }
   if (kind === 'blue') {
     return '#4eb8cf';
