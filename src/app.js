@@ -803,10 +803,10 @@ function updateFilterTextures(timestamp) {
         writeRedHalftone(redImage.data, index, x, y, luminance, grain, maskStrength);
       }
       if (updateBlue) {
-        writeBlueSepiaPhoto(blueImage.data, index, x, y, textureWidth, textureHeight, luminance, grain, maskStrength);
+        writeKleinBlueScreenprint(blueImage.data, index, x, y, luminance, grain, maskStrength);
       }
       if (updateGreen) {
-        writeKleinBlueScreenprint(greenImage.data, index, x, y, luminance, grain, maskStrength);
+        writeGreenPopHalftone(greenImage.data, index, x, y, luminance, grain, maskStrength);
       }
     }
   }
@@ -953,6 +953,28 @@ function writeKleinBlueScreenprint(data, index, x, y, luminance, grain, maskStre
   data[index + 3] = panelAlpha(maskStrength, 255, 0.84);
 }
 
+function writeGreenPopHalftone(data, index, x, y, luminance, grain, maskStrength) {
+  const cell = 1.94;
+  const center = cell * 0.5;
+  const localX = (x % cell) - center;
+  const localY = (y % cell) - center;
+  const shade = clamp(0.9 - luminance / 255 + grain * 0.06, 0, 1);
+  const radius = clamp(0.14 + shade * cell * 0.58, 0.12, cell * 0.54);
+  const isInk = localX * localX + localY * localY <= radius * radius;
+
+  if (isInk) {
+    data[index] = 0;
+    data[index + 1] = 0;
+    data[index + 2] = 0;
+  } else {
+    data[index] = 255;
+    data[index + 1] = 215;
+    data[index + 2] = 0;
+  }
+
+  data[index + 3] = panelAlpha(maskStrength, 255, 0.82);
+}
+
 function panelAlpha(maskStrength, maxAlpha, minimumCoverage) {
   return Math.round((minimumCoverage + maskStrength * (1 - minimumCoverage)) * maxAlpha);
 }
@@ -968,9 +990,9 @@ function panelAccent(kind) {
     return '#741b1e';
   }
   if (kind === 'blue') {
-    return '#8a6d48';
+    return '#002fa7';
   }
-  return '#002fa7';
+  return '#f3d018';
 }
 
 function mixColor(a, b, amount) {
