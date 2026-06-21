@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="双手 AR 滤镜">
+  <rect width="512" height="512" rx="96" fill="#050609"/>
+  <path d="M96 306 174 162 252 306Z" fill="#d94a36" opacity=".94"/>
+  <path d="M174 162 338 162 252 306Z" fill="#3aa8c4" opacity=".94"/>
+  <path d="M338 162 416 306 252 306Z" fill="#79aa68" opacity=".94"/>
+  <path d="M112 324 252 324 400 324" fill="none" stroke="#f1e3be" stroke-width="18" stroke-linecap="round"/>
+  <circle cx="96" cy="306" r="22" fill="#f1e3be"/>
+  <circle cx="174" cy="162" r="22" fill="#f1e3be"/>
+  <circle cx="338" cy="162" r="22" fill="#f1e3be"/>
+  <circle cx="416" cy="306" r="22" fill="#f1e3be"/>
+</svg>
