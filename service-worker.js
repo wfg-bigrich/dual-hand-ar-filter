@@ -1,9 +1,10 @@
-const CACHE_NAME = 'dual-hand-ar-v2';
+const CACHE_NAME = 'dual-hand-ar-v3';
 const APP_SHELL = [
   './',
   './index.html',
   './src/styles.css',
   './src/app.js',
+  './src/app.js?v=20260621-visual3',
   './src/geometry.js',
   './manifest.webmanifest',
   './icon.svg',
@@ -46,6 +47,11 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  if (shouldPreferNetwork(request, url)) {
+    event.respondWith(networkFirst(request));
+    return;
+  }
+
   event.respondWith(
     caches.match(request).then((cached) => {
       const networkFetch = fetch(request)
@@ -63,3 +69,25 @@ self.addEventListener('fetch', (event) => {
     }),
   );
 });
+
+function shouldPreferNetwork(request, url) {
+  return request.mode === 'navigate'
+    || url.pathname.endsWith('/')
+    || url.pathname.endsWith('.html')
+    || url.pathname.endsWith('.js')
+    || url.pathname.endsWith('.css')
+    || url.pathname.endsWith('.webmanifest');
+}
+
+function networkFirst(request) {
+  return fetch(request)
+    .then((response) => {
+      if (response && response.ok) {
+        const copy = response.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+      }
+
+      return response;
+    })
+    .catch(() => caches.match(request).then((cached) => cached || caches.match('./index.html')));
+}
